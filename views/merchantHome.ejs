@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Lato:wght@100;300;400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <title>Revenue Mate</title>
+    <link rel="icon" href="logo.png" type="image/x-icon" />
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <link rel="stylesheet" href="merchant.css" />
+  </head>
+  <body>
+    <header>
+      <nav>
+        <div class="logo-container">
+          <img src="logo.png" alt="Revenue Mate Logo" class="logo" />
+          <span class="brand-name">Revenue Mate</span>
+        </div>
+        <ul>
+          <li><a href="/merchant">Home</a></li>
+          <li><a href="/Profile">Profile</a></li>
+          <li><a href="/logout">Logout</a></li>
+        </ul>
+      </nav>
+    </header>
+
+    <div class="transactions">
+      <div class="left-column">
+        <div class="typeof">
+          <ul>
+            <p><strong>Choose Type:</strong></p>
+            <li><a href="/transaction">Record Transaction</a></li>
+            <li><a href="/expenses">Record Expenses</a></li>
+            <li><a href="/inventory">Manage Inventory</a></li>
+            <li><a href="/clear">Clear</a></li>
+          </ul>
+        </div>
+        <% if (transaction) { %>
+        <div class="itemsadded">
+          <table class="table">
+            <tr>
+              <th>Product name</th>
+              <th>Quantity</th>
+              <th>Price</th>
+            </tr>
+            <% for (let i = 0; i < addedItems.length; i++) { %>
+            <tr>
+              <td><%= addedItems[i].name %></td>
+              <td><%= addedItems[i].quantity %></td>
+              <td><%= addedItems[i].price %></td>
+            </tr>
+            <% } %>
+          </table>
+          <form method="post" action="/submitTransaction">
+            <input
+              name="name"
+              type="text"
+              placeholder="Customer Name"
+              required
+              id="name"
+            />
+            <label for="nature">Mode of Payment : </label>
+            <select name="nature" id="nature">
+              <option value="CASH">Cash</option>
+              <option value="CARD">Card</option>
+              <option value="UPI">UPI</option>
+            </select>
+            <button id="transact" type="submit">Transact</button>
+          </form>
+          <p id="amount">Total Amount = ₹<%= totalAmount %></p>
+          <p>Prevoius Transaction Status : <%= status %></p>
+        </div>
+        <% } %>
+      </div>
+      <% if (transaction) { %>
+      <div class="right-column">
+        <div class="additems">
+          <h2>Add items</h2>
+          <div class="form-container">
+            <form action="/transact" method="post">
+              <label for="items"><p>Select Item to add:</p></label>
+              <select name="items" id="items">
+                <option value="NONE">NONE</option>
+                <% for (let i = 0; i < inventory.length; i++) { %>
+                <option value="<%= inventory[i] %>"><%= inventory[i] %></option>
+                <% } %>
+              </select>
+              <label for="quantity"><p>Quantity:</p></label>
+              <input
+                type="text"
+                name="quantity"
+                required
+                placeholder="Quantity"
+              />
+              <button type="submit">Add</button>
+            </form>
+          </div>
+        </div>
+      </div>
+      <% } %>
+    </div>
+    <% if (!transaction) { %>
+    <form action="/transactExpense" method="post">
+      <input
+        name="name"
+        type="text"
+        placeholder="Vendor Name"
+        required
+        id="vendor-name"
+      />
+      <input
+        name="amount"
+        type="text"
+        placeholder="Enter Amount"
+        required
+        id="amount"
+      />
+      <input
+        name="reason"
+        type="text"
+        placeholder="Reason Of Expenses"
+        required
+        id="reason"
+      />
+      <label for="nature">Mode of Payment:</label>
+      <select name="nature" id="nature">
+        <option value="CASH">Cash</option>
+        <option value="CARD">Card</option>
+        <option value="UPI">UPI</option>
+      </select>
+      <button id="transact" type="submit">Transact</button>
+    </form>
+    <p>Prevoius Transaction Status : <%= status %></p>
+    <% } %>
+  </body>
+</html>
