@@ -97,6 +97,7 @@ main {
   font-family: "Lato", sans-serif;
   text-align: center;
   box-shadow: 4px 4px 4px #3700B3;
+  margin-top: 30px;
 }
 
 .homepagetext h1 {
@@ -137,7 +138,7 @@ main {
   align-items: flex-start;
   width: 35%;
   height: 100%;
-  margin-top: 17.5px;
+  margin-top: 30px;
   margin-right: 10px;
 }
 
@@ -145,6 +146,7 @@ main {
   width: 100%;
   height: auto;
   object-fit: cover;
+  margin-top: 30px;
 }
 
 .page {
