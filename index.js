@@ -7,18 +7,38 @@ import { Strategy } from "passport-local";
 import GoogleStrategy from "passport-google-oauth20";
 import session from "express-session";
 import env from "dotenv";
-var items = [{ name: "Oranges", quantity: "4", price: "45.9" }, { name: "Apples", quantity: "6", price: "47.9" }];
-console.log(items);
-var inventory = ["Oranges", "Apples", "Kiwi", "Mango"];
-var itemsDatabase = [];
+import { dirname } from "path";
+import { fileURLToPath } from "url";
+import axios from "axios";
+import fs from "fs";
 const app = express();
 const port = 3000;
 const saltRounds = 10;
-let transactioDone = "NULL TRANSACTION";
 env.config();
+
+var items = [{ name: "Oranges", quantity: "4", price: "45.9" }, { name: "Apples", quantity: "6", price: "47.9" }];
+var inventory = ["Oranges", "Apples", "Kiwi", "Mango"];
+var itemsDatabase = [];
+let transactioDone = "NULL TRANSACTION";
 let currentUserId;
 let currentUserName = "";
 let transactionStatus = true;
+let transaction = [];
+let invoiceNo = 1;
+
+let invoiceItems = {
+    logo: "hello.png",
+    from: "name",
+    to: "name",
+    number: "INV - " + invoiceNo,
+    currency: "inr",
+    date: new Date().toLocaleDateString(),
+    items: [],
+};
+const API_URL = "https://invoice-generator.com";
+const yourBearerToken = process.env.BEARER_TOKEN;
+
+var dir = dirname(fileURLToPath(import.meta.url));
 app.use(
     session({
         secret: process.env.SESSION_SECRET,
@@ -26,6 +46,7 @@ app.use(
         saveUninitialized: true,
     })
 );
+
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static("public"));
 
@@ -40,7 +61,14 @@ const db = new pg.Client({
     password: process.env.PG_PASSWORD,
     port: process.env.PG_PORT,
 });
+
 db.connect();
+const config = {
+    headers: {
+        Authorization: `Bearer ${yourBearerToken}`,
+        "Content-Type": "application/json"
+    },
+};
 
 app.get("/", (req, res) => {
     res.render("home.ejs");
@@ -83,19 +111,48 @@ app.get("/merchant", async (req, res) => {
     if (req.isAuthenticated()) {
         currentUserId = req.user.id;
         currentUserName = req.user.username;
-        currentUserId
         let price = 0;
         for (let i = 0; i < items.length; i++) {
             price += (parseFloat(items[i].price) * parseInt(items[i].quantity));
         }
         try {
-            const result = await db.query("SELECT itemname , price FROM inventory WHERE merchantid = $1", [currentUserId]);
+            const result = await db.query("SELECT itemname, price FROM inventory WHERE merchantid = $1", [currentUserId]);
             const out = result.rows;
             itemsDatabase = out;
             inventory = [];
-            out.forEach((item) => { inventory.push(item.itemname) });
+            out.forEach((item) => { inventory.push(item.itemname); });
             console.log(items);
-            res.render("merchantHome.ejs", { transaction: transactionStatus, addedItems: items, inventory: inventory, totalAmount: price ,status : transactioDone});
+
+            transaction = [];
+
+            const salesResult = await db.query("SELECT date, amount, payment FROM sales WHERE merchantid = $1", [currentUserId]);
+            const expenditureResult = await db.query("SELECT date, amount, payment FROM expenditure WHERE merchantid = $1", [currentUserId]);
+
+            console.log(salesResult.rows);
+            console.log(expenditureResult.rows);
+
+            for (let i = 0; i < salesResult.rows.length; i++) {
+                const obj = {
+                    date: salesResult.rows[i].date,
+                    type: "credit",
+                    amount: salesResult.rows[i].amount,
+                    mode: salesResult.rows[i].payment,
+                }
+                transaction.push(obj);
+            }
+            for (let i = 0; i < expenditureResult.rows.length; i++) {
+                const obj = {
+                    date: expenditureResult.rows[i].date,
+                    type: "debit",
+                    amount: expenditureResult.rows[i].amount,
+                    mode: expenditureResult.rows[i].payment,
+                }
+                transaction.push(obj);
+            }
+
+            console.log(transaction);
+
+            res.render("merchantHome.ejs", { transaction: transactionStatus, addedItems: items, inventory: inventory, totalAmount: price, status: transactioDone, username: currentUserName });
         } catch (error) {
             console.error("Error executing query", error);
             res.status(500).send("Internal Server Error");
@@ -105,12 +162,10 @@ app.get("/merchant", async (req, res) => {
     }
 });
 
+
 app.post("/transact", (req, res) => {
-    console.log("user : " + req.user);
     const item = req.body.items;
     const quantity = req.body.quantity;
-    console.log("Item: " + item + ", Quantity: " + quantity);
-    console.log("Items Database: ", itemsDatabase);
     let price = -1.0;
     for (let i = 0; i < itemsDatabase.length; i++) {
         if (itemsDatabase[i].itemname === item) {
@@ -148,29 +203,51 @@ app.post("/transact", (req, res) => {
 
 app.get("/clear", (req, res) => {
     items = [];
+    transaction = [];
     res.redirect("/merchant");
 });
 
 app.post("/submitTransaction", async (req, res) => {
-    let price = 0;
-    try {
-        for (let i = 0; i < items.length; i++) {
-            price += (parseFloat(items[i].price) * parseInt(items[i].quantity));
+    if (req.isAuthenticated()) {
+        let price = 0;
+        try {
+            for (let i = 0; i < items.length; i++) {
+                price += (parseFloat(items[i].price) * parseInt(items[i].quantity));
+            }
+            console.log(currentUserId);
+            const json = JSON.stringify(items);
+            const date = new Date().toLocaleDateString() + " " + new Date().toLocaleTimeString();
+            const result = await db.query("INSERT INTO sales (merchantid , date , customername, amount , items , payment) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
+                [currentUserId, date, req.body.name, price, json, req.body.nature]);
+            console.log(result.rows[0]);
+            transactioDone = "SUCCESS";
+            {
+                invoiceItems.from = currentUserName;
+                invoiceItems.to = req.body.name;
+                invoiceItems.date = date;
+                invoiceItems.number = "INV - " + invoiceNo;
+                ++(invoiceNo);
+                for (let i = 0; i < items.length; i++) {
+                    const obj = {
+                        name: items[i].name,
+                        quantity: items[i].quantity,
+                        unit_cost: items[i].price,
+                    }
+                    invoiceItems.items.push(obj);
+                }
+            }
+            items = [];
+            await generateInvoice();
+            await downloadInvoice();
+            res.redirect("/merchant");
         }
-        console.log(currentUserId);
-        const json = JSON.stringify(items);
-        const date = new Date().toLocaleDateString() + " " + new Date().toLocaleTimeString();
-        const result = await db.query("INSERT INTO sales (merchantid , date , customername, amount , items , payment) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
-            [currentUserId, date, req.body.name, price, json, req.body.nature]);
-        console.log(result.rows[0]);
-        items = [];
-        transactioDone = "SUCCESS";
+        catch (err) {
+            console.log(err);
+        }
     }
-    catch(err){
-        console.log(err);
+    else {
+        console.log("No Authentciation : ");
     }
-
-    res.redirect("/merchant");
 });
 
 app.post("/transactExpense", async (req, res) => {
@@ -205,6 +282,64 @@ app.post("/transactExpense", async (req, res) => {
     }
 
     res.redirect("/merchant");
+});
+
+app.get("/Profile", (req, res) => {
+    if (req.isAuthenticated()) {
+        let creditAmount = 0;
+        let debitAmount = 0;
+        for (let i = 0; i < transaction.length; i++) {
+            if (transaction[i].type === "credit") creditAmount += parseFloat(transaction[i].amount);
+            else debitAmount += parseFloat(transaction[i].amount);
+        }
+        res.render("profile.ejs", { Transaction: transaction, creditAmount: creditAmount, debitAmount: debitAmount, netSales: creditAmount - debitAmount, username: currentUserName });
+    }
+    else {
+        res.redirect("/login");
+    }
+});
+
+app.post("/gettransactions", async (req, res) => {
+    const type = req.body.type;
+    const nature = req.body.nature;
+    console.log(type);
+    console.log(nature);
+    try {
+        transaction = [];
+        const salesResult = await db.query("SELECT date, amount, payment FROM sales WHERE merchantid = $1", [currentUserId]);
+        const expenditureResult = await db.query("SELECT date, amount, payment FROM expenditure WHERE merchantid = $1", [currentUserId]);
+        if ((type === 'NONE') || (type === 'sales')) {
+            console.log("type : None || sales");
+            for (let i = 0; i < salesResult.rows.length; i++) {
+                if ((nature === 'NONE') || (nature === salesResult.rows[i].payment)) {
+                    const obj = {
+                        date: salesResult.rows[i].date,
+                        type: "credit",
+                        amount: salesResult.rows[i].amount,
+                        mode: salesResult.rows[i].payment,
+                    }
+                    transaction.push(obj);
+                }
+            }
+        }
+        if (type === 'NONE' || type === 'expenditure') {
+            for (let i = 0; i < expenditureResult.rows.length; i++) {
+                if (nature === 'NONE' || nature === expenditureResult.rows[i].payment) {
+                    const obj = {
+                        date: expenditureResult.rows[i].date,
+                        type: "debit",
+                        amount: expenditureResult.rows[i].amount,
+                        mode: expenditureResult.rows[i].payment,
+                    }
+                    transaction.push(obj);
+                }
+            }
+        }
+    }
+    catch (err) {
+        console.log(err);
+    }
+    res.redirect("/Profile");
 });
 
 app.post("/login", (req, res, next) => {
@@ -277,7 +412,58 @@ app.get("/expenses", (req, res) => {
     res.redirect("/merchant");
 });
 
-app.get("/sale", (req, res) => {
+app.get("/inventory", async (req, res) => {
+    if (req.isAuthenticated()) {
+        try {
+            const result = await db.query("SELECT itemname FROM inventory WHERE merchantid = $1", [currentUserId]);
+            const inventoryList = result.rows;
+            console.log(inventoryList);
+            res.render("inventory.ejs", { inventory: inventoryList, username: currentUserName });
+        }
+        catch (err) {
+            console.log(err);
+        }
+    }
+    else {
+        res.redirect("/login");
+    }
+});
+
+app.post("/deleteInventory", async (req, res) => {
+    const itemsToDelete = req.body.selectedItems;
+    console.log('Items to delete:', itemsToDelete); // Debugging line to check the request body
+
+    if (!itemsToDelete) {
+        return res.status(400).send("No items selected");
+    }
+
+    try {
+        if (Array.isArray(itemsToDelete)) {
+            for (let i = 0; i < itemsToDelete.length; i++) {
+                await db.query("DELETE FROM inventory WHERE merchantid = $1 AND itemname = $2", [currentUserId, itemsToDelete[i]]);
+            }
+        }
+        else {
+            await db.query("DELETE FROM inventory WHERE merchantid = $1 AND itemname = $2", [currentUserId, itemsToDelete]);
+        }
+        res.redirect("/inventory");
+    } catch (err) {
+        console.log(err);
+        res.status(500).send("Internal Server Error");
+    }
+});
+
+app.post("/addinventory", async (req, res) => {
+    const name = req.body.itemname;
+    const price = req.body.price;
+    try {
+        const result = await db.query("INSERT INTO inventory (merchantid,itemname,price) VALUES($1, $2,$3)", [currentUserId, name, price]);
+        res.redirect("/inventory");
+    }
+    catch (err) {
+        console.log(err);
+        res.status(500).send("Internal Server Error");
+    }
 
 });
 
@@ -364,6 +550,54 @@ passport.deserializeUser(async (id, cb) => {
 app.get("/hello", (req, res) => {
     res.render("merchantHome.ejs");
 });
+
+async function generateInvoice() {
+    app.post("/generate-invoice", async (req, res) => {
+        try {
+            const axiosConfig = {
+                headers: config.headers,
+                responseType: 'arraybuffer'
+            };
+
+            const response = await axios.post(API_URL, invoice, axiosConfig);
+
+            fs.writeFile("invoice.pdf", response.data, (err) => {
+                if (err) {
+                    console.error(err);
+                    return res.status(500).send("Error saving invoice");
+                }
+                res.send("Saved invoice to invoice.pdf");
+            });
+        } catch (error) {
+            console.error(error);
+            res.status(500).send("Error generating invoice");
+        }
+    });
+
+};
+
+async function downloadInvoice() {
+    const url = dir + "/invoice.pdf"
+    try {
+        const response = await axios({
+            url: url,
+            method: 'GET',
+            responseType: 'blob'
+        });
+
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', 'invoice.pdf'); // Specify the filename
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+    } catch (error) {
+        console.error('Error downloading the PDF:', error);
+    }
+};
+
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
 });
