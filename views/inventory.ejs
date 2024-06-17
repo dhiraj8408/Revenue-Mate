@@ -9,12 +9,70 @@
       href="https://fonts.googleapis.com/css2?family=Lato:wght@100;300;400;500;700;900&display=swap"
       rel="stylesheet"
     />
-    <title>Revenue Mate</title>
+    <title>Inventory - Revenue Mate</title>
     <link rel="icon" href="logo.png" type="image/x-icon" />
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
-    <link rel="stylesheet" href="merchant.css" />
+    <link rel="stylesheet" href="inventory.css" />
   </head>
-<body>
-    
-</body>
+  <body>
+    <header>
+      <nav>
+        <div class="logo-container">
+          <img src="logo.png" alt="Revenue Mate Logo" class="logo" />
+          <span class="brand-name">Revenue Mate</span>
+        </div>
+        <ul>
+          <li><a href="/merchant">Home</a></li>
+          <li><a href="/Profile">Profile</a></li>
+          <li><a href="/logout">Logout</a></li>
+        </ul>
+      </nav>
+    </header>
+    <main class="content">
+      <div class="left-half">
+        <form action="/deleteInventory" method="POST">
+          <h3>Select Items that you wish to delete :</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Select</th>
+                <th>Item Name</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% for (let index = 0; index < inventory.length; index++) { %>
+              <tr>
+                <td>
+                  <input
+                    type="checkbox"
+                    name="selectedItems"
+                    value="<%= inventory[index].itemname %>"
+                  />
+                </td>
+                <td><%= inventory[index].itemname %></td>
+              </tr>
+              <% } %>
+            </tbody>
+          </table>
+          <button type="submit">Delete</button>
+        </form>
+      </div>
+      <div class="right-half">
+        <div class="add">
+          <h3>Add a Item :</h3>
+          <form action="/addinventory" method="post">
+            <input
+              type="text"
+              placeholder="ItemName"
+              required
+              name="itemname"
+            />
+            <input type="text" placeholder="Price" required name="price" />
+            <button type="submit">Add</button>
+          </form>
+        </div>
+      </div>
+    </main>
+  </body>
+  <%- include("partials/footer.ejs") %>
 </html>

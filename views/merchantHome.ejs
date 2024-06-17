@@ -9,9 +9,10 @@
       href="https://fonts.googleapis.com/css2?family=Lato:wght@100;300;400;500;700;900&display=swap"
       rel="stylesheet"
     />
-    <title>Revenue Mate</title>
+    <title>Home - Revenue Mate</title>
     <link rel="icon" href="logo.png" type="image/x-icon" />
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <link rel="stylesheet" href="merchant.css" />
   </head>
   <body>
@@ -135,7 +136,8 @@
       </select>
       <button id="transact" type="submit">Transact</button>
     </form>
-    <p>Prevoius Transaction Status : <%= status %></p>
+    <p>Previous Transaction Status : <%= status %></p>
     <% } %>
   </body>
+  <%- include("partials/footer.ejs") %>
 </html>

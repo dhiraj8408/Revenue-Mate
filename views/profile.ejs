@@ -12,9 +12,61 @@
     <title>Revenue Mate</title>
     <link rel="icon" href="logo.png" type="image/x-icon" />
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
-    <link rel="stylesheet" href="merchant.css" />
+    <link rel="stylesheet" href="profile.css" />
   </head>
-<body>
-
-</body>
+  <body>
+    <header>
+      <nav>
+        <div class="logo-container">
+          <img src="logo.png" alt="Revenue Mate Logo" class="logo" />
+          <span class="brand-name">Revenue Mate</span>
+        </div>
+        <ul>
+          <li><a href="/merchant">Home</a></li>
+          <li><a href="/Profile">Profile</a></li>
+          <li><a href="/logout">Logout</a></li>
+        </ul>
+      </nav>
+    </header>
+    <div class="types">
+      <form action="/gettransactions" method="post">
+        <label for="type">Filter By Type of Transaction : </label>
+        <select name="type" id="nature">
+          <option value="NONE">None</option>
+          <option value="sales">Sales</option>
+          <option value="Expenditure">Expenditure</option>
+        </select>
+        <label for="nature">Filter By Mode of Payment : </label>
+        <select name="nature" id="nature">
+          <option value = "NONE">None</option>
+          <option value="CASH">Cash</option>
+          <option value="CARD">Card</option>
+          <option value="UPI">UPI</option>
+        </select>
+        <button type="submit">Filter</button>
+      </form>
+      <div class="displayArea">
+        <table class="table">
+          <tr>
+            <th>Date of Transaction</th>
+            <th>Nature</th>
+            <th>Amount</th>
+            <th>Mode Of Payment</th>
+          </tr>
+          <% for (let i = 0; i < Transaction.length; i++) { %>
+          <tr>
+            <td><%= Transaction[i].date %></td>
+            <td><%= Transaction[i].type %></td>
+            <td><%= Transaction[i].amount %></td>
+            <td><%= Transaction[i].mode %></td>
+          </tr>
+          <% } %>
+          <p>Total Credit : ₹<%= creditAmount %></p>
+          <p>Total Debit  : ₹<%= debitAmount %></p>
+          <p>Total Net    : ₹<%= netSales %></p>
+        </table>
+      </div>
+    </div>
+  </body>
+  <%- include("partials/footer.ejs") %>
 </html>
