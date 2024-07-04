@@ -7,10 +7,6 @@ import { Strategy } from "passport-local";
 import GoogleStrategy from "passport-google-oauth20";
 import session from "express-session";
 import env from "dotenv";
-import { dirname } from "path";
-import { fileURLToPath } from "url";
-import axios from "axios";
-import fs from "fs";
 const app = express();
 const port = 3000;
 const saltRounds = 10;
@@ -19,26 +15,13 @@ env.config();
 var items = [{ name: "Oranges", quantity: "4", price: "45.9" }, { name: "Apples", quantity: "6", price: "47.9" }];
 var inventory = ["Oranges", "Apples", "Kiwi", "Mango"];
 var itemsDatabase = [];
-let transactioDone = "NULL TRANSACTION";
+let transactionDone = "NULL TRANSACTION";
 let currentUserId;
 let currentUserName = "";
 let transactionStatus = true;
 let transaction = [];
 let invoiceNo = 1;
 
-let invoiceItems = {
-    logo: "hello.png",
-    from: "name",
-    to: "name",
-    number: "INV - " + invoiceNo,
-    currency: "inr",
-    date: new Date().toLocaleDateString(),
-    items: [],
-};
-const API_URL = "https://invoice-generator.com";
-const yourBearerToken = process.env.BEARER_TOKEN;
-
-var dir = dirname(fileURLToPath(import.meta.url));
 app.use(
     session({
         secret: process.env.SESSION_SECRET,
@@ -63,12 +46,6 @@ const db = new pg.Client({
 });
 
 db.connect();
-const config = {
-    headers: {
-        Authorization: `Bearer ${yourBearerToken}`,
-        "Content-Type": "application/json"
-    },
-};
 
 app.get("/", (req, res) => {
     res.render("home.ejs");
@@ -150,9 +127,7 @@ app.get("/merchant", async (req, res) => {
                 transaction.push(obj);
             }
 
-            console.log(transaction);
-
-            res.render("merchantHome.ejs", { transaction: transactionStatus, addedItems: items, inventory: inventory, totalAmount: price, status: transactioDone, username: currentUserName });
+            res.render("merchantHome.ejs", { transaction: transactionStatus, addedItems: items, inventory: inventory, totalAmount: price, status: transactionDone, username: currentUserName });
         } catch (error) {
             console.error("Error executing query", error);
             res.status(500).send("Internal Server Error");
@@ -164,39 +139,41 @@ app.get("/merchant", async (req, res) => {
 
 
 app.post("/transact", (req, res) => {
-    const item = req.body.items;
-    const quantity = req.body.quantity;
-    let price = -1.0;
-    for (let i = 0; i < itemsDatabase.length; i++) {
-        if (itemsDatabase[i].itemname === item) {
-            price = parseFloat(itemsDatabase[i].price);
-            console.log("Price: " + price);
-            break;
+    if (req.isAuthenticated()) {
+        const item = req.body.items;
+        const quantity = req.body.quantity;
+        let price = -1.0;
+        for (let i = 0; i < itemsDatabase.length; i++) {
+            if (itemsDatabase[i].itemname === item) {
+                price = parseFloat(itemsDatabase[i].price);
+                console.log("Price: " + price);
+                break;
+            }
         }
-    }
-    let idx = -1;
-    let i = 0;
-    while (i < items.length) {
-        if (items[i].name === item) {
-            idx = i;
-            break;
+        let idx = -1;
+        let i = 0;
+        while (i < items.length) {
+            if (items[i].name === item) {
+                idx = i;
+                break;
+            }
+            i++;
         }
-        i++;
-    }
-    if (price !== -1.0) {
-        if (idx !== -1) {
-            items[idx].quantity = String((parseInt(items[idx].quantity) + parseInt(quantity)));
+        if (price !== -1.0) {
+            if (idx !== -1) {
+                items[idx].quantity = String((parseInt(items[idx].quantity) + parseInt(quantity)));
+            }
+            else {
+                const obj = {
+                    name: item,
+                    quantity: String(quantity),
+                    price: String(price),
+                };
+                items.push(obj);
+            }
+        } else {
+            console.error("Item not found or price invalid.");
         }
-        else {
-            const obj = {
-                name: item,
-                quantity: String(quantity),
-                price: String(price),
-            };
-            items.push(obj);
-        }
-    } else {
-        console.error("Item not found or price invalid.");
     }
     res.redirect("/merchant");
 });
@@ -220,7 +197,7 @@ app.post("/submitTransaction", async (req, res) => {
             const result = await db.query("INSERT INTO sales (merchantid , date , customername, amount , items , payment) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
                 [currentUserId, date, req.body.name, price, json, req.body.nature]);
             console.log(result.rows[0]);
-            transactioDone = "SUCCESS";
+            transactionDone = "SUCCESS";
             {
                 invoiceItems.from = currentUserName;
                 invoiceItems.to = req.body.name;
@@ -237,9 +214,6 @@ app.post("/submitTransaction", async (req, res) => {
                 }
             }
             items = [];
-            await generateInvoice();
-            await downloadInvoice();
-            res.redirect("/merchant");
         }
         catch (err) {
             console.log(err);
@@ -248,6 +222,7 @@ app.post("/submitTransaction", async (req, res) => {
     else {
         console.log("No Authentciation : ");
     }
+    res.redirect("/merchant");
 });
 
 app.post("/transactExpense", async (req, res) => {
@@ -261,7 +236,7 @@ app.post("/transactExpense", async (req, res) => {
 
         if (isNaN(amount)) {
             console.error("Invalid amount:", req.body.amount);
-            transactioDone = "FAILED: Invalid amount";
+            transactionDone = "FAILED: Invalid amount";
             res.redirect("/merchant");
             return;
         }
@@ -271,16 +246,15 @@ app.post("/transactExpense", async (req, res) => {
                 "INSERT INTO expenditure (merchantid, date, vendorname, amount, comment, payment) VALUES ($1, $2, $3, $4, $5, $6)",
                 [currentUserId, date, merchantName, amount, reason, nature]
             );
-            transactioDone = "SUCCESS";
+            transactionDone = "SUCCESS";
         } catch (error) {
             console.error("Error executing query", error);
-            transactioDone = "FAILED: Error executing query";
+            transactionDone = "FAILED: Error executing query";
         }
     } else {
         console.error("User not authenticated");
-        transactioDone = "FAILED: User not authenticated";
+        transactionDone = "FAILED: User not authenticated";
     }
-
     res.redirect("/merchant");
 });
 
@@ -300,44 +274,47 @@ app.get("/Profile", (req, res) => {
 });
 
 app.post("/gettransactions", async (req, res) => {
-    const type = req.body.type;
-    const nature = req.body.nature;
-    console.log(type);
-    console.log(nature);
-    try {
-        transaction = [];
-        const salesResult = await db.query("SELECT date, amount, payment FROM sales WHERE merchantid = $1", [currentUserId]);
-        const expenditureResult = await db.query("SELECT date, amount, payment FROM expenditure WHERE merchantid = $1", [currentUserId]);
-        if ((type === 'NONE') || (type === 'sales')) {
-            console.log("type : None || sales");
-            for (let i = 0; i < salesResult.rows.length; i++) {
-                if ((nature === 'NONE') || (nature === salesResult.rows[i].payment)) {
-                    const obj = {
-                        date: salesResult.rows[i].date,
-                        type: "credit",
-                        amount: salesResult.rows[i].amount,
-                        mode: salesResult.rows[i].payment,
+    console.log(req);
+    if (req.isAuthenticated()) {
+        const type = req.body.type;
+        const nature = req.body.nature;
+        console.log(type);
+        console.log(nature);
+        try {
+            transaction = [];
+            const salesResult = await db.query("SELECT date, amount, payment FROM sales WHERE merchantid = $1", [currentUserId]);
+            const expenditureResult = await db.query("SELECT date, amount, payment FROM expenditure WHERE merchantid = $1", [currentUserId]);
+            if ((type === 'NONE') || (type === 'sales')) {
+                console.log("type : None || sales");
+                for (let i = 0; i < salesResult.rows.length; i++) {
+                    if ((nature === 'NONE') || (nature === salesResult.rows[i].payment)) {
+                        const obj = {
+                            date: salesResult.rows[i].date,
+                            type: "credit",
+                            amount: salesResult.rows[i].amount,
+                            mode: salesResult.rows[i].payment,
+                        }
+                        transaction.push(obj);
                     }
-                    transaction.push(obj);
+                }
+            }
+            if (type === 'NONE' || type === 'expenditure') {
+                for (let i = 0; i < expenditureResult.rows.length; i++) {
+                    if (nature === 'NONE' || nature === expenditureResult.rows[i].payment) {
+                        const obj = {
+                            date: expenditureResult.rows[i].date,
+                            type: "debit",
+                            amount: expenditureResult.rows[i].amount,
+                            mode: expenditureResult.rows[i].payment,
+                        }
+                        transaction.push(obj);
+                    }
                 }
             }
         }
-        if (type === 'NONE' || type === 'expenditure') {
-            for (let i = 0; i < expenditureResult.rows.length; i++) {
-                if (nature === 'NONE' || nature === expenditureResult.rows[i].payment) {
-                    const obj = {
-                        date: expenditureResult.rows[i].date,
-                        type: "debit",
-                        amount: expenditureResult.rows[i].amount,
-                        mode: expenditureResult.rows[i].payment,
-                    }
-                    transaction.push(obj);
-                }
-            }
+        catch (err) {
+            console.log(err);
         }
-    }
-    catch (err) {
-        console.log(err);
     }
     res.redirect("/Profile");
 });
@@ -550,53 +527,6 @@ passport.deserializeUser(async (id, cb) => {
 app.get("/hello", (req, res) => {
     res.render("merchantHome.ejs");
 });
-
-async function generateInvoice() {
-    app.post("/generate-invoice", async (req, res) => {
-        try {
-            const axiosConfig = {
-                headers: config.headers,
-                responseType: 'arraybuffer'
-            };
-
-            const response = await axios.post(API_URL, invoice, axiosConfig);
-
-            fs.writeFile("invoice.pdf", response.data, (err) => {
-                if (err) {
-                    console.error(err);
-                    return res.status(500).send("Error saving invoice");
-                }
-                res.send("Saved invoice to invoice.pdf");
-            });
-        } catch (error) {
-            console.error(error);
-            res.status(500).send("Error generating invoice");
-        }
-    });
-
-};
-
-async function downloadInvoice() {
-    const url = dir + "/invoice.pdf"
-    try {
-        const response = await axios({
-            url: url,
-            method: 'GET',
-            responseType: 'blob'
-        });
-
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', 'invoice.pdf'); // Specify the filename
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-    } catch (error) {
-        console.error('Error downloading the PDF:', error);
-    }
-};
 
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
