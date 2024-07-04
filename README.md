@@ -15,7 +15,7 @@ Streamline Your Sales, Simplify Your Success
 
 - **Inventory Management**: Manage your inventory with ease. Add, Delete , and track items in your inventory
 
-## Pages (or) Sections 
+## Pages (or) Sections (or) EndPoints
 - **Home** : This page provides you a brief description about REVENUE MATE
 - **SignUp** : Users can SignUp for services via email (or) Google
 - **Login** : Registered users can login from here
