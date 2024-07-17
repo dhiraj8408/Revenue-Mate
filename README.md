@@ -40,7 +40,8 @@ Streamline Your Sales, Simplify Your Success
 ## Overview of Tables and Data Stored in Databases with PostgreSQL
 - **User Lists**: This table contains user details along with their salted passwords. It assigns a unique primary key, *ID*, which serves as a foreign key for other tables.
   <img width="691" alt="image" src="https://github.com/user-attachments/assets/e4f7a544-be18-4761-89c9-1da5ac8771cf">
-- **Inventory** : This table stores all items along with their prices for a particular user. Each row (or item) has a primary key, *ID*, and a foreign key, *MerchantId*, which refers to the merchant in the User Lists table.
+- **Inventory** : This table stores all items along with their prices for a particular user. Each row (or item) has a primary key, *ID*, and a foreign key, *MerchantId*, 
+  which refers to the merchant in the User Lists table.
   <img width="330" alt="image" src="https://github.com/user-attachments/assets/60f455dc-4cba-4fe5-a21c-c7eb7ee706ee">
 - **Sales** : This table stores the date and time of purchase, customer name, amount, list of items sold, and mode of payment. Each row has a primary key, *ID*, and a foreign key, *MerchantId*, which refers to the merchant in the User Lists table.
   <img width="696" alt="image" src="https://github.com/user-attachments/assets/17c471e4-f169-4b31-b2af-b65a920bea71">
